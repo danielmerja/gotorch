@@ -1,3 +1,4 @@
+// Package nn implements neural network layers and components
 package nn
 
 import (
@@ -6,27 +7,34 @@ import (
 	"math/rand"
 )
 
+// Dense implements a fully connected neural network layer.
+// It transforms input by applying weights and biases: output = input * weights + biases
 type Dense struct {
-	InputDim  int
-	OutputDim int
-	Weights   *tensor.Tensor
-	Biases    *tensor.Tensor
-	Input     *tensor.Tensor // Store for backprop
+	InputDim  int            // Number of input features
+	OutputDim int            // Number of output features
+	Weights   *tensor.Tensor // Weight matrix of shape [InputDim, OutputDim]
+	Biases    *tensor.Tensor // Bias vector of shape [OutputDim]
+	Input     *tensor.Tensor // Stores input for backpropagation
 
-	// Gradients
-	WeightGrads *tensor.Tensor
-	BiasGrads   *tensor.Tensor
+	// Gradients for optimization
+	WeightGrads *tensor.Tensor // Accumulated gradients for weights
+	BiasGrads   *tensor.Tensor // Accumulated gradients for biases
 }
 
+// NewDense creates a new dense layer with specified input and output dimensions.
+// Weights are initialized using Xavier/Glorot initialization to help with training.
+// Biases are initialized to zero.
 func NewDense(inputDim, outputDim int) *Dense {
-	// Xavier/Glorot initialization
+	// Xavier/Glorot initialization scale
 	scale := math.Sqrt(2.0 / float64(inputDim+outputDim))
 
+	// Initialize weights with scaled normal distribution
 	weights := make([]float64, inputDim*outputDim)
 	for i := range weights {
 		weights[i] = rand.NormFloat64() * scale
 	}
 
+	// Initialize biases to zero
 	biases := make([]float64, outputDim)
 
 	return &Dense{
@@ -39,6 +47,11 @@ func NewDense(inputDim, outputDim int) *Dense {
 	}
 }
 
+// Forward performs the forward pass computation.
+// Given input x, computes output = x * W + b where:
+// - x is the input tensor of shape [batch_size, input_dim]
+// - W is the weight matrix of shape [input_dim, output_dim]
+// - b is the bias vector of shape [output_dim]
 func (d *Dense) Forward(input *tensor.Tensor) *tensor.Tensor {
 	d.Input = input // Save for backprop
 
@@ -63,6 +76,12 @@ func (d *Dense) Forward(input *tensor.Tensor) *tensor.Tensor {
 	return result
 }
 
+// Backward performs the backward pass to compute gradients.
+// Given gradient of loss with respect to output (gradOutput),
+// computes:
+// - Gradient with respect to input
+// - Gradient with respect to weights
+// - Gradient with respect to biases
 func (d *Dense) Backward(gradOutput *tensor.Tensor) *tensor.Tensor {
 	// Compute gradients
 	// dW = input^T * gradOutput
@@ -80,11 +99,14 @@ func (d *Dense) Backward(gradOutput *tensor.Tensor) *tensor.Tensor {
 	return inputGrad
 }
 
+// UpdateParams updates the layer parameters (weights and biases)
+// using the computed gradients and the specified learning rate.
 func (d *Dense) UpdateParams(learningRate float64) {
-	// Update weights and biases using gradients
+	// Update weights: W = W - lr * dW
 	weightUpdate, _ := tensor.Multiply(d.WeightGrads, tensor.NewTensor(learningRate))
 	d.Weights, _ = tensor.Subtract(d.Weights, weightUpdate)
 
+	// Update biases: b = b - lr * db
 	biasUpdate, _ := tensor.Multiply(d.BiasGrads, tensor.NewTensor(learningRate))
 	d.Biases, _ = tensor.Subtract(d.Biases, biasUpdate)
 }

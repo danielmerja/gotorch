@@ -2,6 +2,7 @@ package nn
 
 import (
 	"gotorch/tensor"
+	"math"
 	"reflect"
 	"testing"
 )
@@ -29,7 +30,16 @@ func Test_NewRNN(t *testing.T) {
 	}
 }
 
-// test fails
+// TODO: Known Issues
+// 1. Test_RNNForward fails due to shape mismatch in bias addition
+// 2. Current test uses simplified bias handling that doesn't match implementation
+// 3. Need to add tests for:
+//    - Proper bias broadcasting
+//    - Gradient computation
+//    - Parameter updates
+//    - More complex sequences
+
+// test fails due to tensor shape mismatch in bias addition
 func Test_RNNForward(t *testing.T) {
 	inputDim := 2
 	hiddenDim := 3
@@ -45,19 +55,16 @@ func Test_RNNForward(t *testing.T) {
 		{0.1, 0.2, 0.3},
 		{0.4, 0.5, 0.6},
 	})
-	rnn.Bh = tensor.NewTensor([][]float64{{0.1, 0.2, 0.3}}, 1, hiddenDim)
+	// Bias should be a vector [hidden_dim]
+	rnn.Bh = tensor.NewTensor([]float64{0.1, 0.2, 0.3}, hiddenDim)
 
 	// Input: batch size of 2, sequence length of 2, input dim of 2
 	input := tensor.NewTensor([]float64{
-		0.0, 0.1, // batch 0, time 0
-		0.2, 0.3, // batch 0, time 1
-		0.4, 0.5, // batch 1, time 0
-		0.6, 0.7, // batch 1, time 1
+		0.1, 0.2, // batch 0, time 0
+		0.3, 0.4, // batch 0, time 1
+		0.5, 0.6, // batch 1, time 0
+		0.7, 0.8, // batch 1, time 1
 	}, 2, 2, 2) // [batch_size, seq_len, input_dim]
-
-	for i := range input.Data {
-		input.Data[i] = float64(i) * 0.1
-	}
 
 	output := rnn.Forward(input)
 
@@ -77,12 +84,13 @@ func Test_RNNForward(t *testing.T) {
 	}
 }
 
+// test passes but uses simplified bias handling
 func Test_RNNForwardSingleTimeStep(t *testing.T) {
 	inputDim := 2
 	hiddenDim := 2
 	rnn := NewRNN(inputDim, hiddenDim)
 
-	// Set simple weights
+	// Set simple identity weights
 	rnn.Wxh = tensor.NewTensor([][]float64{
 		{1, 0},
 		{0, 1},
@@ -91,9 +99,10 @@ func Test_RNNForwardSingleTimeStep(t *testing.T) {
 		{0, 0},
 		{0, 0},
 	})
-	rnn.Bh = tensor.NewTensor([][]float64{{0, 0}}, 1, hiddenDim)
+	// Bias needs to match output shape [batch_size, hidden_dim]
+	rnn.Bh = tensor.NewTensor([]float64{0, 0}, hiddenDim)
 
-	// Single time step input needs proper shape [batch_size, seq_len, input_dim]
+	// Single time step input with shape [batch_size=1, seq_len=1, input_dim=2]
 	input := tensor.NewTensor([]float64{1, 2}, 1, 1, 2)
 
 	output := rnn.Forward(input)
@@ -103,9 +112,9 @@ func Test_RNNForwardSingleTimeStep(t *testing.T) {
 		t.Errorf("Incorrect output shape: got %v, want %v", output.Shape, expectedShape)
 	}
 
-	// With these weights and zero bias, output should be tanh of input
-	expectedFirstValue := float64(1)
-	expectedSecondValue := float64(2)
+	// With identity weights and zero bias, output should be tanh of input
+	expectedFirstValue := math.Tanh(1.0)
+	expectedSecondValue := math.Tanh(2.0)
 	if !floatEquals(output.Data[0], expectedFirstValue, 1e-6) {
 		t.Errorf("Incorrect first output value: got %v, want %v", output.Data[0], expectedFirstValue)
 	}
